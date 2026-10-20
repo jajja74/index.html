@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Partners Admin - Account Activation</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-12">
+
+    <!-- Header -->
+    <header class="bg-[#1a1a1a] text-white px-4 py-3.5 sticky top-0 z-40 shadow-md">
+                    <div class="max-w-xl mx-auto flex flex-wrap justify-between items-center gap-y-2">
+            <div class="flex flex-col leading-none">
+                <div class="text-xl font-extrabold italic tracking-tight">
+                    <span class="text-white">1x</span><span class="text-[#003b7a]">Bet</span>
+                    <span class="text-[#8cc63f] text-sm not-italic font-bold ml-1">ADMIN</span>
+                </div>
+                <span class="text-gray-300 text-[9px] tracking-[0.2em] mt-1 font-medium">ACCOUNT ACTIVATION</span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button type="button" id="pendingToggle" onclick="togglePendingRequests()"
+                    class="bg-[#2a2a2a] border border-amber-400/50 px-3 py-1.5 rounded flex items-center gap-2 text-xs text-white font-semibold">
+                    <i class="fa-solid fa-clock text-amber-400"></i>
+                    Pending <span id="pendingCountBadge" class="text-amber-400 font-extrabold">0</span>
+                </button>
+                <button type="button" onclick="toggleHomeAdjustmentPanel()"
+                    class="bg-[#2a2a2a] border border-[#8cc63f]/50 px-2 sm:px-3 py-1.5 rounded flex items-center gap-2 text-xs text-white font-semibold">
+                    <i class="fa-solid fa-house text-[#8cc63f]"></i> Home
+                </button>
+                <button type="button" onclick="toggleAdjustmentPanel()"
+                    class="bg-[#2a2a2a] border border-blue-400/50 px-2 sm:px-3 py-1.5 rounded flex items-center gap-2 text-xs text-white font-semibold">
+                    <i class="fa-solid fa-chart-line text-blue-400"></i> Report Search
+                </button>
+                <!-- Total Count Badge in Header -->
+                <div class="bg-[#2a2a2a] border border-[#8cc63f]/40 px-3 py-1.5 rounded flex items-center gap-2">
+                    <i class="fa-solid fa-users text-[#8cc63f] text-sm"></i>
+                    <span class="text-xs text-gray-300 font-medium">Active:</span>
+                    <span id="totalCountBadge" class="text-sm font-extrabold text-[#8cc63f]">0</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="max-w-xl mx-auto px-4 pt-5">
+
+        <!-- Pending Player Reports -->
+        <section id="pendingPanel" class="hidden bg-white border border-amber-200 rounded-sm shadow-sm p-4 mb-6 border-t-4 border-t-amber-400">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-extrabold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+                    <i class="fa-solid fa-clock text-amber-500"></i> Pending Player Requests
+                </h2>
+                <button type="button" onclick="togglePendingRequests(false)" class="text-gray-400 hover:text-gray-700" aria-label="Close pending requests">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="pendingRequestsContainer" class="space-y-3">
+                <div class="text-center text-gray-400 text-sm py-4">Loading requests...</div>
+            </div>
+        </section>
+
+        <!-- Read-only partner lookup -->
+        <section id="adjustmentPanel" class="hidden bg-white border border-blue-200 rounded-sm shadow-sm p-4 mb-6 border-t-4 border-t-blue-500">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-extrabold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-blue-500"></i> Partner Report Search
+                </h2>
+                <button type="button" onclick="toggleAdjustmentPanel(false)" class="text-gray-400 hover:text-gray-700" aria-label="Close report search">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <label for="adjustmentAffId" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Partner Aff ID</label>
+            <div class="flex gap-2">
+                <input type="text" id="adjustmentAffId" placeholder="Enter partner Aff ID"
+                    class="min-w-0 flex-1 bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-blue-500">
+                <button type="button" onclick="lookupAdjustmentPartner()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold px-4">Find</button>
+            </div>
+            <div id="adjustmentPartnerDetails" class="hidden mt-3 border border-gray-200 rounded p-3 text-sm" aria-live="polite"></div>
+            <div id="adjustmentStatus" class="hidden mt-3 p-3 text-sm font-medium rounded" aria-live="polite"></div>
+        </section>
+
+        <!-- Home page money adjustments (keeps Report Adjust options separate) -->
+        <section id="homeAdjustmentPanel" class="hidden bg-white border border-green-200 rounded-sm shadow-sm p-4 mb-6 border-t-4 border-t-[#8cc63f]">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-extrabold text-gray-800 uppercase tracking-wide flex items-center gap-2">
+                    <i class="fa-solid fa-house text-[#8cc63f]"></i> Home Balance Adjustments
+                </h2>
+                <button type="button" onclick="toggleHomeAdjustmentPanel(false)" class="text-gray-400 hover:text-gray-700" aria-label="Close home adjustments">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <label for="homeAdjustmentAffId" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Partner Aff ID</label>
+            <div class="flex gap-2">
+                <input type="text" id="homeAdjustmentAffId" placeholder="Enter partner Aff ID"
+                    class="min-w-0 flex-1 bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f]">
+                <button type="button" onclick="lookupHomeAdjustmentPartner()" class="bg-[#8cc63f] hover:bg-[#7ebd34] text-gray-900 text-xs font-bold px-4">Find</button>
+            </div>
+            <div id="homeAdjustmentPartnerDetails" class="hidden mt-3 border border-gray-200 rounded p-3 text-sm"></div>
+            <div id="homeAdjustmentControls" class="hidden mt-3 space-y-3">
+                <div>
+                    <label for="homeAdjustmentMetric" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Home page option</label>
+                    <select id="homeAdjustmentMetric" class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f]">
+                        <option value="available_to_withdraw">Available to Withdraw ($)</option>
+                        <option value="yesterday">Yesterday ($)</option>
+                        <option value="current_month">Current Month ($)</option>
+                        <option value="days_30">30 Days ($)</option>
+                        <option value="total">Total ($)</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="homeAdjustmentAmount" class="block text-xs font-semibold text-gray-600 uppercase mb-1">Amount ($)</label>
+                    <input type="number" id="homeAdjustmentAmount" min="0.01" step="0.01" placeholder="Enter dollar amount"
+                        class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f]">
+                    <p class="text-[11px] text-gray-500 mt-1">Enter an amount in dollars (up to 2 decimal places).</p>
+                </div>
+                <div class="flex gap-2">
+                    <button type="button" onclick="saveHomeAdjustment(1, this)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-4 py-2">Add $</button>
+                    <button type="button" onclick="saveHomeAdjustment(-1, this)" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2">Subtract $</button>
+                </div>
+            </div>
+            <div id="homeAdjustmentStatus" class="hidden mt-3 p-3 text-sm font-medium rounded" aria-live="polite"></div>
+        </section>
+
+        <!-- Account Activation Form Card -->
+        <div class="bg-white border border-gray-200 rounded-sm shadow-sm p-5 mb-6 border-t-4 border-t-[#8cc63f]">
+            <div class="flex items-center justify-between mb-4 pb-2 border-b border-gray-100">
+                <h1 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-user-check text-[#8cc63f]"></i>
+                    Account Activation
+                </h1>
+                <span class="text-xs text-gray-400 font-medium">Supabase Connected</span>
+            </div>
+
+            <!-- Status Message -->
+            <div id="statusAlert" class="hidden mb-4 p-3 text-sm font-medium rounded"></div>
+
+            <form id="activationForm" class="space-y-3.5">
+                <!-- Row 1: First Name & Last Name -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">First Name *</label>
+                        <input type="text" id="first_name" required placeholder="Ex: Kavishka"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Last Name *</label>
+                        <input type="text" id="last_name" required placeholder="Ex: Lakshitha"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                </div>
+
+                <!-- Row 2: Email & Phone Number -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Email *</label>
+                        <input type="email" id="email" required placeholder="user@example.com"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Phone Number *</label>
+                        <input type="text" id="phone_number" required placeholder="+94740569971"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                </div>
+
+                <!-- Row 3: Username & Password -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Username *</label>
+                        <input type="text" id="username" required placeholder="Ex: kavishka997 / @Ray_asia"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                        <span id="usernameError" class="hidden text-xs text-red-600 mt-1 block" aria-live="polite"></span>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Password *</label>
+                        <input type="text" id="password" required placeholder="Enter password"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                </div>
+
+                <!-- Row 4: Promo Code, Player Account, Aff ID -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Promo Code *</label>
+                        <input type="text" id="promo_code" required placeholder="Ex: WINLK"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Player Account *</label>
+                        <input type="text" id="player_account" required placeholder="Ex: 1758466927"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Aff ID *</label>
+                        <input type="text" id="aff_id" required placeholder="Ex: 984512"
+                            class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                        <span id="affIdError" class="hidden text-xs text-red-600 mt-1 block" aria-live="polite"></span>
+                    </div>
+                </div>
+
+                <!-- Commission Selection -->
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 uppercase mb-1">Commission *</label>
+                    <select id="commission" required
+                        class="w-full bg-gray-50 border border-gray-300 text-gray-800 text-sm px-3 py-2.5 focus:outline-none focus:border-[#8cc63f] focus:bg-white">
+                        <option value="" disabled selected>Select commission</option>
+                        <option value="25%">25%</option>
+                        <option value="30%">30%</option>
+                        <option value="35%">35%</option>
+                        <option value="40%">40%</option>
+                        <option value="45%">45%</option>
+                        <option value="50%">50%</option>
+                        <option value="55%">55%</option>
+                        <option value="60%">60%</option>
+                        <option value="65%">65%</option>
+                        <option value="70%">70%</option>
+                        <option value="75%">75%</option>
+                        <option value="80%">80%</option>
+                        <option value="85%">85%</option>
+                        <option value="90%">90%</option>
+                        <option value="95%">95%</option>
+                        <option value="100%">100%</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="pt-2">
+                    <button type="submit" id="submitBtn"
+                        class="w-full bg-[#8cc63f] hover:bg-[#7ebd34] text-[#111111] font-bold text-sm py-3 px-6 uppercase tracking-wide transition flex justify-center items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-bolt"></i> ACTIVATE ACCOUNT
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Activated Accounts Count & Section Header -->
+        <div class="flex items-center justify-between mb-3 px-1">
+            <h2 class="text-sm font-extrabold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-layer-group text-[#1d4ed8]"></i>
+                Activated Accounts List
+            </h2>
+            <span class="bg-[#1d4ed8] text-white text-xs font-bold px-2.5 py-1 rounded-full">
+                Total: <span id="listCountText">0</span>
+            </span>
+        </div>
+
+        <!-- Activated Accounts Cards Container -->
+        <div id="accountsContainer" class="space-y-3">
+            <div class="bg-white border border-gray-200 p-6 text-center text-gray-400 text-sm">
+                Loading activated accounts...
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // Supabase Configuration
+        const SUPABASE_URL = 'https://vtobhkwzvwaaxxtikxfq.supabase.co';
+        const SUPABASE_PUBLIC_KEY = 'sb_publishable_839dZUvDqZvNy9n5HtIttA_Nz3cWsdn';
+        const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLIC_KEY);
+
+        const activationForm = document.getElementById('activationForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const statusAlert = document.getElementById('statusAlert');
+        const accountsContainer = document.getElementById('accountsContainer');
+        const totalCountBadge = document.getElementById('totalCountBadge');
+        const listCountText = document.getElementById('listCountText');
+        const pendingPanel = document.getElementById('pendingPanel');
+        const pendingRequestsContainer = document.getElementById('pendingRequestsContainer');
+        const pendingCountBadge = document.getElementById('pendingCountBadge');
+        const adjustmentPanel = document.getElementById('adjustmentPanel');
+        const adjustmentAffId = document.getElementById('adjustmentAffId');
+        const adjustmentPartnerDetails = document.getElementById('adjustmentPartnerDetails');
+        const adjustmentStatus = document.getElementById('adjustmentStatus');
+        const homeAdjustmentPanel = document.getElementById('homeAdjustmentPanel');
+        const homeAdjustmentAffId = document.getElementById('homeAdjustmentAffId');
+        const homeAdjustmentPartnerDetails = document.getElementById('homeAdjustmentPartnerDetails');
+        const homeAdjustmentControls = document.getElementById('homeAdjustmentControls');
+        const homeAdjustmentMetric = document.getElementById('homeAdjustmentMetric');
+        const homeAdjustmentAmount = document.getElementById('homeAdjustmentAmount');
+        const homeAdjustmentStatus = document.getElementById('homeAdjustmentStatus');
+        let currentHomeAdjustmentPartner = null;
+
+        function escapeHTML(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[char]));
+        }
+
+        async function checkDuplicateAccountField(field, value) {
+            const messageElement = document.getElementById(field === 'username' ? 'usernameError' : 'affIdError');
+            const cleanValue = value.trim();
+            messageElement.textContent = '';
+            messageElement.classList.add('hidden');
+            if (!cleanValue) return false;
+
+            const { data, error } = await supabaseClient
+                .from('partner_accounts')
+                .select('id')
+                .eq(field, cleanValue)
+                .limit(1);
+
+            if (error) {
+                showMessage('Could not check whether the ' + field + ' already exists: ' + error.message, true);
+                return null;
+            }
+            if (data && data.length > 0) {
+                messageElement.textContent = 'Already exists';
+                messageElement.classList.remove('hidden');
+                return true;
+            }
+            return false;
+        }
+
+        document.getElementById('username').addEventListener('blur', (event) => {
+            checkDuplicateAccountField('username', event.target.value);
+        });
+        document.getElementById('aff_id').addEventListener('blur', (event) => {
+            checkDuplicateAccountField('aff_id', event.target.value);
+        });
+
+        function togglePendingRequests(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : pendingPanel.classList.contains('hidden');
+            pendingPanel.classList.toggle('hidden', !shouldOpen);
+            if (shouldOpen) loadPendingRequests();
+        }
+
+        function toggleAdjustmentPanel(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : adjustmentPanel.classList.contains('hidden');
+            adjustmentPanel.classList.toggle('hidden', !shouldOpen);
+            if (shouldOpen) adjustmentAffId.focus();
+        }
+
+        const homeMetricLabels = {
+            available_to_withdraw: 'Available to Withdraw',
+            yesterday: 'Yesterday',
+            current_month: 'Current Month',
+            days_30: '30 Days',
+            total: 'Total'
+        };
+
+        function toggleHomeAdjustmentPanel(forceOpen) {
+            const shouldOpen = typeof forceOpen === 'boolean'
+                ? forceOpen
+                : homeAdjustmentPanel.classList.contains('hidden');
+            homeAdjustmentPanel.classList.toggle('hidden', !shouldOpen);
+            if (shouldOpen) homeAdjustmentAffId.focus();
+        }
+
+        function showHomeAdjustmentStatus(message, isError = false) {
+            homeAdjustmentStatus.textContent = message;
+            homeAdjustmentStatus.className = `mt-3 p-3 text-sm font-medium rounded ${
+                isError ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-green-100 text-green-800 border border-green-300'
+            }`;
+        }
+
+        async function lookupHomeAdjustmentPartner() {
+            const affId = homeAdjustmentAffId.value.trim();
+            currentHomeAdjustmentPartner = null;
+            homeAdjustmentPartnerDetails.classList.add('hidden');
+            homeAdjustmentControls.classList.add('hidden');
+            homeAdjustmentStatus.classList.add('hidden');
+            if (!affId) {
+                showHomeAdjustmentStatus('Enter an Aff ID first.', true);
+                return;
+            }
+
+            const { data: partner, error } = await supabaseClient
+                .from('partner_accounts')
+                .select('id, aff_id, username')
+                .eq('aff_id', affId)
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                showHomeAdjustmentStatus('Could not find partner: ' + error.message, true);
+                return;
+            }
+            if (!partner) {
+                showHomeAdjustmentStatus('No account found for this Aff ID.', true);
+                return;
+            }
+
+            const { data: adjustments, error: adjustmentError } = await supabaseClient
+                .from('partner_home_adjustments')
+                .select('metric, amount')
+                .eq('aff_id', partner.aff_id);
+            if (adjustmentError) {
+                showHomeAdjustmentStatus('Could not load home adjustments. Create the partner_home_adjustments table and policies using the SQL provided.', true);
+                return;
+            }
+
+            currentHomeAdjustmentPartner = partner;
+            const totals = Object.fromEntries(Object.keys(homeMetricLabels).map((metric) => [metric, 0]));
+            (adjustments || []).forEach((item) => {
+                if (Object.prototype.hasOwnProperty.call(totals, item.metric)) totals[item.metric] += Number(item.amount || 0);
+            });
+            homeAdjustmentPartnerDetails.innerHTML = `
+                <div><span class="text-gray-500">Username:</span> <strong class="text-gray-900">${escapeHTML(partner.username)}</strong></div>
+                <div><span class="text-gray-500">Aff ID:</span> <strong class="text-gray-900">${escapeHTML(partner.aff_id)}</strong></div>
+                <div class="mt-3 border-t border-gray-100 pt-2 space-y-1">
+                    ${Object.entries(homeMetricLabels).map(([metric, label]) => {
+                        const value = totals[metric];
+                        return `<div class="flex justify-between gap-3"><span class="text-gray-500">${label} net adjustment</span><strong class="${value < 0 ? 'text-red-700' : 'text-green-700'}">${value < 0 ? '-' : '+'}$${Math.abs(value).toFixed(2)}</strong></div>`;
+                    }).join('')}
+                </div>
+            `;
+            homeAdjustmentPartnerDetails.classList.remove('hidden');
+            homeAdjustmentControls.classList.remove('hidden');
+        }
+
+        async function saveHomeAdjustment(direction, button) {
+            if (!currentHomeAdjustmentPartner) return;
+            const rawAmount = homeAdjustmentAmount.value.trim();
+            if (!/^\d+(\.\d{1,2})?$/.test(rawAmount) || Number(rawAmount) <= 0) {
+                showHomeAdjustmentStatus('Enter a dollar amount greater than zero, with no more than 2 decimal places.', true);
+                return;
+            }
+
+            const amount = Number(rawAmount) * direction;
+            const metric = homeAdjustmentMetric.value;
+            const buttons = homeAdjustmentControls.querySelectorAll('button');
+            buttons.forEach((item) => item.disabled = true);
+            const originalText = button.textContent;
+            button.textContent = direction > 0 ? 'Adding...' : 'Subtracting...';
+
+            const { error } = await supabaseClient
+                .from('partner_home_adjustments')
+                .insert([{
+                    aff_id: currentHomeAdjustmentPartner.aff_id,
+                    username: currentHomeAdjustmentPartner.username,
+                    metric,
+                    amount
+                }]);
+
+            buttons.forEach((item) => item.disabled = false);
+            button.textContent = originalText;
+            if (error) {
+                showHomeAdjustmentStatus('Adjustment failed: ' + error.message + '. Check the home adjustment table and INSERT policy.', true);
+                return;
+            }
+
+            homeAdjustmentAmount.value = '';
+            const partnerAffId = currentHomeAdjustmentPartner.aff_id;
+            await lookupHomeAdjustmentPartner();
+            showHomeAdjustmentStatus(`${direction > 0 ? 'Added' : 'Subtracted'} $${Number(rawAmount).toFixed(2)} for ${homeMetricLabels[metric]} (Aff ID ${partnerAffId}).`);
+        }
+
+        function showAdjustmentStatus(message, isError = false) {
+            adjustmentStatus.textContent = message;
+            adjustmentStatus.className = `mt-3 p-3 text-sm font-medium rounded ${
+                isError ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-green-100 text-green-800 border border-green-300'
+            }`;
+        }
+
+        async function lookupAdjustmentPartner() {
+            const affId = adjustmentAffId.value.trim();
+            adjustmentPartnerDetails.classList.add('hidden');
+            adjustmentStatus.classList.add('hidden');
+            if (!affId) {
+                showAdjustmentStatus('Enter an Aff ID first.', true);
+                return;
+            }
+
+            const { data: partner, error } = await supabaseClient
+                .from('partner_accounts')
+                .select('aff_id, username')
+                .eq('aff_id', affId)
+                .limit(1)
+                .maybeSingle();
+
+            if (error) {
+                showAdjustmentStatus('Could not find partner: ' + error.message, true);
+                return;
+            }
+            if (!partner) {
+                showAdjustmentStatus('No account found for this Aff ID.', true);
+                return;
+            }
+
+            adjustmentPartnerDetails.innerHTML = `
+                <div><span class="text-gray-500">Username:</span> <strong class="text-gray-900">${escapeHTML(partner.username)}</strong></div>
+                <div><span class="text-gray-500">Aff ID:</span> <strong class="text-gray-900">${escapeHTML(partner.aff_id)}</strong></div>
+            `;
+            adjustmentPartnerDetails.classList.remove('hidden');
+        }
+
+        async function loadPendingRequests() {
+            pendingRequestsContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">Loading requests...</div>';
+            const { data: reports, error } = await supabaseClient
+                .from('player_reports')
+                .select('id, partner_id, player_id, created_at')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                pendingCountBadge.textContent = '0';
+                pendingRequestsContainer.textContent = 'Could not load requests: ' + error.message;
+                return;
+            }
+
+            const requests = reports || [];
+            pendingCountBadge.textContent = requests.length;
+            if (requests.length === 0) {
+                pendingRequestsContainer.innerHTML = '<div class="text-center text-gray-400 text-sm py-4">There are no pending player requests.</div>';
+                return;
+            }
+
+            const partnerIds = [...new Set(requests.map((report) => String(report.partner_id).trim()).filter(Boolean))];
+            const [{ data: partnersById }, { data: partnersByAffId }] = await Promise.all([
+                supabaseClient.from('partner_accounts').select('id, aff_id, username').in('id', partnerIds),
+                supabaseClient.from('partner_accounts').select('id, aff_id, username').in('aff_id', partnerIds)
+            ]);
+            const partnersByRequestId = new Map();
+            (partnersByAffId || []).forEach((partner) => partnersByRequestId.set(String(partner.aff_id).trim(), partner));
+            (partnersById || []).forEach((partner) => partnersByRequestId.set(String(partner.id).trim(), partner));
+
+            pendingRequestsContainer.innerHTML = requests.map((report) => {
+                const partner = partnersByRequestId.get(String(report.partner_id).trim());
+                const username = partner?.username || 'Not found';
+                const affId = partner?.aff_id ?? report.partner_id;
+                const requestId = Number(report.id);
+                return `
+                    <article class="border border-gray-200 rounded p-3">
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm mb-3">
+                            <div><span class="block text-[10px] uppercase font-semibold text-gray-400">Aff ID</span><span class="font-semibold text-gray-800">${escapeHTML(affId)}</span></div>
+                            <div><span class="block text-[10px] uppercase font-semibold text-gray-400">Username</span><span class="font-semibold text-gray-800">${escapeHTML(username)}</span></div>
+                            <div><span class="block text-[10px] uppercase font-semibold text-gray-400">Player ID</span><span class="font-semibold text-gray-800 break-all">${escapeHTML(report.player_id)}</span></div>
+                        </div>
+                        <div class="flex gap-2">
+                            <button type="button" onclick="reviewPlayerReport(${requestId}, 'approved', this)" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold px-4 py-2 rounded">Approve</button>
+                            <button type="button" onclick="reviewPlayerReport(${requestId}, 'rejected', this)" class="bg-red-600 hover:bg-red-700 text-white text-xs font-bold px-4 py-2 rounded">Reject</button>
+                        </div>
+                    </article>
+                `;
+            }).join('');
+        }
+
+        async function reviewPlayerReport(id, status, button) {
+            const actionButtons = button.closest('article').querySelectorAll('button');
+            actionButtons.forEach((actionButton) => actionButton.disabled = true);
+            button.textContent = status === 'approved' ? 'Approving...' : 'Rejecting...';
+
+            const { data, error } = await supabaseClient
+                .from('player_reports')
+                .update({ status })
+                .eq('id', id)
+                .eq('status', 'pending')
+                .select('id');
+
+            if (error) {
+                actionButtons.forEach((actionButton) => actionButton.disabled = false);
+                button.textContent = status === 'approved' ? 'Approve' : 'Reject';
+                showMessage('Request update failed: ' + error.message + '. Check Supabase UPDATE permissions/RLS.', true);
+                return;
+            }
+            if (!data || data.length === 0) {
+                showMessage('Request was not updated. Check Supabase UPDATE permissions/RLS.', true);
+                await loadPendingRequests();
+                return;
+            }
+
+            showMessage(status === 'approved' ? 'Player request approved.' : 'Player request rejected.');
+            await loadPendingRequests();
+        }
+
+        function showMessage(message, isError = false) {
+            statusAlert.textContent = message;
+            statusAlert.className = `mb-4 p-3 text-sm font-medium rounded ${
+                isError ? 'bg-red-100 text-red-700 border border-red-300' : 'bg-green-100 text-green-800 border border-green-300'
+            }`;
+            statusAlert.classList.remove('hidden');
+            setTimeout(() => {
+                statusAlert.classList.add('hidden');
+            }, 4000);
+        }
+
+        // Load all activated accounts from Supabase
+        async function loadActivatedAccounts() {
+            const { data, error } = await supabaseClient
+                .from('partner_accounts')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                accountsContainer.innerHTML = `
+                    <div class="bg-red-50 border border-red-200 p-4 text-center text-red-600 text-sm">
+                        Error loading accounts: ${error.message}
+                    </div>
+                `;
+                return;
+            }
+
+            const total = data ? data.length : 0;
+            totalCountBadge.textContent = total;
+            listCountText.textContent = total;
+
+            if (!data || total === 0) {
+                accountsContainer.innerHTML = `
+                    <div class="bg-white border border-gray-200 p-6 text-center text-gray-400 text-sm">
+                        No activated accounts yet. Use the form above to activate an account.
+                    </div>
+                `;
+                return;
+            }
+
+            const escapeHTML = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[char]));
+            const commissions = ['25%', '30%', '35%', '40%', '45%', '50%', '55%', '60%', '65%', '70%', '75%', '80%', '85%', '90%', '95%', '100%'];
+
+            accountsContainer.innerHTML = data.map((acc, index) => {
+                const countNumber = total - index;
+                const fields = [
+                    ['first_name', 'First Name'], ['last_name', 'Last Name'], ['email', 'Email'],
+                    ['phone_number', 'Phone Number'], ['username', 'Username'], ['password', 'Password'],
+                    ['promo_code', 'Promo Code'], ['player_account', 'Player Account'], ['aff_id', 'Aff ID']
+                ];
+                const details = fields.map(([key, label]) => `
+                    <label class="block">
+                        <span class="text-gray-400 block uppercase font-semibold text-[10px]">${label}</span>
+                        <input name="${key}" value="${escapeHTML(acc[key])}" readonly required
+                            class="account-edit-field w-full text-gray-800 font-medium bg-transparent border border-transparent px-1 py-1 focus:outline-none">
+                    </label>
+                `).join('');
+                const commissionOptions = commissions.map((value) => `
+                    <option value="${value}" ${acc.commission === value ? 'selected' : ''}>${value}</option>
+                `).join('');
+
+                return `
+                    <div class="bg-white border border-gray-200 rounded-sm shadow-sm overflow-hidden relative border-l-4 border-l-[#8cc63f]">
+                        <div class="bg-gray-50 px-4 py-2.5 border-b border-gray-100 flex justify-between items-center">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-[#1a1a1a] text-[#8cc63f] text-xs font-extrabold px-2 py-0.5 rounded">#${countNumber}</span>
+                                <span class="font-bold text-gray-800 text-sm">${escapeHTML(acc.first_name)} ${escapeHTML(acc.last_name)}</span>
+                                <span class="text-xs text-[#8cc63f] font-bold">(@${escapeHTML(acc.username)})</span>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button type="button" onclick="editAccount(this)" class="text-blue-600 hover:text-blue-800 text-xs font-semibold">Edit</button>
+                                <button type="button" onclick="deleteAccount('${escapeHTML(acc.id)}')" class="text-gray-400 hover:text-red-500 text-xs transition" title="Delete Account">
+                                    <i class="fa-solid fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <form onsubmit="updateAccount(event, '${escapeHTML(acc.id)}')">
+                            <div class="p-4 grid grid-cols-2 sm:grid-cols-3 gap-y-2.5 gap-x-4 text-xs">
+                                ${details}
+                                <label class="block">
+                                    <span class="text-gray-400 block uppercase font-semibold text-[10px]">Commission</span>
+                                    <select name="commission" disabled required class="account-edit-field w-full text-gray-800 font-bold bg-transparent border border-transparent px-1 py-1 focus:outline-none">
+                                        <option value="" disabled ${acc.commission ? '' : 'selected'}>Select commission</option>
+                                        ${commissionOptions}
+                                    </select>
+                                </label>
+                            </div>
+                            <div class="account-edit-actions px-4 pb-4 gap-2" style="display: none;">
+                                <button type="submit" class="bg-[#8cc63f] hover:bg-[#7ebd34] text-gray-900 font-bold text-xs px-4 py-2">Save Changes</button>
+                                <button type="button" onclick="loadActivatedAccounts()" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-xs px-4 py-2">Cancel</button>
+                            </div>
+                        </form>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Handle Account Activation Form Submit
+        activationForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ACTIVATING...';
+
+            const newAccount = {
+                first_name: document.getElementById('first_name').value.trim(),
+                last_name: document.getElementById('last_name').value.trim(),
+                email: document.getElementById('email').value.trim(),
+                phone_number: document.getElementById('phone_number').value.trim(),
+                username: document.getElementById('username').value.trim(),
+                password: document.getElementById('password').value.trim(),
+                promo_code: document.getElementById('promo_code').value.trim(),
+                player_account: document.getElementById('player_account').value.trim(),
+                aff_id: document.getElementById('aff_id').value.trim(),
+                commission: document.getElementById('commission').value
+            };
+
+            const [usernameExists, affIdExists] = await Promise.all([
+                checkDuplicateAccountField('username', newAccount.username),
+                checkDuplicateAccountField('aff_id', newAccount.aff_id)
+            ]);
+            if (usernameExists === null || affIdExists === null || usernameExists || affIdExists) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-bolt"></i> ACTIVATE ACCOUNT';
+                return;
+            }
+
+            const { error } = await supabaseClient
+                .from('partner_accounts')
+                .insert([newAccount]);
+
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fa-solid fa-bolt"></i> ACTIVATE ACCOUNT';
+
+            if (error) {
+                showMessage('Error activating account: ' + error.message, true);
+            } else {
+                showMessage('Account activated successfully!');
+                activationForm.reset();
+                loadActivatedAccounts();
+            }
+        });
+
+        function editAccount(button) {
+            const form = button.closest('.bg-white').querySelector('form');
+            form.querySelectorAll('.account-edit-field').forEach((field) => {
+                field.disabled = false;
+                field.readOnly = false;
+                field.classList.remove('bg-transparent', 'border-transparent');
+                field.classList.add('bg-gray-50', 'border-gray-300');
+            });
+            form.querySelector('.account-edit-actions').style.display = 'flex';
+            button.classList.add('hidden');
+        }
+
+        async function updateAccount(event, id) {
+            event.preventDefault();
+            const form = event.currentTarget;
+            const updateButton = form.querySelector('button[type="submit"]');
+            updateButton.disabled = true;
+            updateButton.textContent = 'Saving...';
+
+            try {
+                const fields = ['first_name', 'last_name', 'email', 'phone_number', 'username', 'password', 'promo_code', 'player_account', 'aff_id', 'commission'];
+                const accountData = Object.fromEntries(
+                    fields.map((field) => [field, form.elements.namedItem(field).value.trim()])
+                );
+                const { data, error } = await supabaseClient
+                    .from('partner_accounts')
+                    .update(accountData)
+                    .eq('id', id)
+                    .select('id');
+
+                if (error) throw error;
+                if (!data || data.length === 0) {
+                    throw new Error('No partner row was updated. Check the row ID and Supabase UPDATE RLS policy.');
+                }
+
+                await loadActivatedAccounts();
+                showMessage('Partner details saved and refreshed successfully.');
+            } catch (error) {
+                showMessage('Save failed: ' + (error?.message || 'Unknown error') + '. Check Supabase UPDATE permissions/RLS and that the column names match.', true);
+            } finally {
+                updateButton.disabled = false;
+                updateButton.textContent = 'Save Changes';
+            }
+        }
+
+        // Delete an account card from the database
+        async function deleteAccount(id) {
+            const deletePassword = prompt('Enter password to delete this account:');
+            if (deletePassword !== '0000') {
+                if (deletePassword !== null) alert('Incorrect password. Account was not deleted.');
+                return;
+            }
+            if (!confirm('Are you sure you want to remove this account?')) return;
+            const { error } = await supabaseClient
+                .from('partner_accounts')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                alert('Delete failed: ' + error.message);
+            } else {
+                loadActivatedAccounts();
+            }
+        }
+
+        // Initial load
+        loadActivatedAccounts();
+        loadPendingRequests();
+    </script>
+</body>
+</html>
